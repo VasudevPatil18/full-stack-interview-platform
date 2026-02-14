@@ -28,16 +28,31 @@ export function useWebRTC(session, user, isHost, isParticipant) {
 
   const peerConnection = useRef(null);
   const screenStream = useRef(null);
+  const connectionTimeoutRef = useRef(null);
 
   // Initialize socket connection
   useEffect(() => {
     if (!session || !user || (!isHost && !isParticipant)) return;
 
     const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+    console.log('Connecting to socket at:', API_URL);
+    
     const socketInstance = io(API_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000,
     });
+
+    // Set connection timeout
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (isConnecting) {
+        console.error('Connection timeout');
+        toast.error('Connection timeout. Please check your network and refresh.');
+        setIsConnecting(false);
+      }
+    }, 15000);
 
     socketInstance.on('connect', () => {
       console.log('Socket connected:', socketInstance.id);
@@ -50,8 +65,17 @@ export function useWebRTC(session, user, isHost, isParticipant) {
       });
     });
 
+    socketInstance.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      toast.error('Failed to connect to server. Please check your connection.');
+      setIsConnecting(false);
+    });
+
     socketInstance.on('existing-users', (users) => {
       console.log('Existing users:', users);
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
       if (users.length > 0) {
         setRemoteUser(users[0]);
         // Create offer to existing user
@@ -107,6 +131,9 @@ export function useWebRTC(session, user, isHost, isParticipant) {
     setSocket(socketInstance);
 
     return () => {
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
       socketInstance.disconnect();
     };
   }, [session, user, isHost, isParticipant]);
@@ -120,10 +147,16 @@ export function useWebRTC(session, user, isHost, isParticipant) {
           audio: true,
         });
         setLocalStream(stream);
-        setIsConnecting(false);
+        console.log('Local media stream acquired');
       } catch (error) {
         console.error('Error accessing media devices:', error);
-        toast.error('Failed to access camera/microphone');
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          toast.error('Camera/microphone access denied. Please allow permissions and refresh.');
+        } else if (error.name === 'NotFoundError') {
+          toast.error('No camera or microphone found. Please connect a device.');
+        } else {
+          toast.error('Failed to access camera/microphone: ' + error.message);
+        }
         setIsConnecting(false);
       }
     };
@@ -168,8 +201,19 @@ export function useWebRTC(session, user, isHost, isParticipant) {
 
     pc.onconnectionstatechange = () => {
       console.log('Connection state:', pc.connectionState);
-      if (pc.connectionState === 'failed') {
-        toast.error('Connection failed. Please refresh.');
+      if (pc.connectionState === 'connected') {
+        toast.success('Connected to peer');
+      } else if (pc.connectionState === 'failed') {
+        toast.error('Connection failed. Please refresh and try again.');
+      } else if (pc.connectionState === 'disconnected') {
+        toast.info('Connection lost. Attempting to reconnect...');
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        toast.error('Network connection failed. Check your firewall settings.');
       }
     };
 

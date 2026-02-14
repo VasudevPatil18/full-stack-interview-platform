@@ -224,6 +224,8 @@ function SessionPage() {
               user={user}
               isHost={isHost}
               isParticipant={isParticipant}
+              currentCode={code}
+              currentLanguage={selectedLanguage}
             />
           </div>
         );
@@ -442,6 +444,8 @@ function SessionPage() {
                   user={user}
                   isHost={isHost}
                   isParticipant={isParticipant}
+                  currentCode={code}
+                  currentLanguage={selectedLanguage}
                 />
               </div>
             </Panel>

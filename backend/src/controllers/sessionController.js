@@ -31,12 +31,26 @@ export async function createSession(req, res) {
         joinUrl,
       });
 
+      console.log('\n📧 Sending meeting invite email...');
+      console.log('   To:', inviteEmail);
+      console.log('   Meeting Code:', session.meetingCode);
+
       // Send email without waiting
       sendEmail({
         to: inviteEmail,
         subject: emailContent.subject,
         html: emailContent.html,
         text: emailContent.text,
+      }).then(result => {
+        if (result.success) {
+          console.log('✅ Meeting invite email sent successfully');
+        } else if (result.skipped) {
+          console.log('⚠️  Meeting invite email skipped:', result.reason);
+          console.log('   Meeting Code:', session.meetingCode);
+          console.log('   Join URL:', joinUrl);
+        } else {
+          console.log('❌ Meeting invite email failed:', result.error);
+        }
       }).catch(err => console.log("Email error:", err.message));
 
       // Check if invited user exists and create notification (async)
@@ -245,12 +259,30 @@ export async function sendMeetingReminder(req, res) {
       timeUntil: "soon",
     });
 
-    await sendEmail({
+    console.log('\n📧 Sending meeting reminder email...');
+    console.log('   To:', recipientEmail);
+    console.log('   Meeting Code:', session.meetingCode);
+
+    const emailResult = await sendEmail({
       to: recipientEmail,
       subject: emailContent.subject,
       html: emailContent.html,
       text: emailContent.text,
     });
+
+    if (!emailResult.success) {
+      if (emailResult.skipped) {
+        console.log('⚠️  Email skipped:', emailResult.reason);
+        return res.status(200).json({ 
+          message: "Reminder created but email not sent (SMTP not configured)",
+          emailSkipped: true 
+        });
+      }
+      return res.status(500).json({ 
+        message: "Failed to send reminder email",
+        error: emailResult.error 
+      });
+    }
 
     // Create notification if user exists
     if (recipient) {

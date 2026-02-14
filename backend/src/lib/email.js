@@ -3,43 +3,44 @@ import { ENV } from "./env.js";
 
 // Create reusable transporter
 const createTransporter = () => {
-  // For development, use Ethereal (fake SMTP service)
-  // For production, use real SMTP service (Gmail, SendGrid, etc.)
-  
-  if (ENV.NODE_ENV === "production" && ENV.SMTP_HOST) {
+  // Check if SMTP is configured
+  if (!ENV.SMTP_HOST || !ENV.SMTP_USER || !ENV.SMTP_PASS) {
+    console.log('⚠️  SMTP not configured. Emails will not be sent.');
+    console.log('   Add SMTP settings to backend/.env to enable emails.');
+    return null;
+  }
+
+  try {
     return nodemailer.createTransport({
       host: ENV.SMTP_HOST,
-      port: ENV.SMTP_PORT || 587,
+      port: parseInt(ENV.SMTP_PORT) || 587,
       secure: ENV.SMTP_SECURE === "true",
       auth: {
         user: ENV.SMTP_USER,
         pass: ENV.SMTP_PASS,
       },
+      // Add timeout and connection settings
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
+  } catch (error) {
+    console.error('❌ Failed to create email transporter:', error.message);
+    return null;
   }
-  
-  // Development mode - log to console
-  return nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: ENV.SMTP_USER || "test@example.com",
-      pass: ENV.SMTP_PASS || "test",
-    },
-  });
 };
 
 export const sendEmail = async ({ to, subject, html, text }) => {
   try {
-    // Skip email sending if SMTP is not configured in development
-    if (ENV.NODE_ENV !== "production" && !ENV.SMTP_USER) {
-      console.log("📧 Email skipped (SMTP not configured):", { to, subject });
-      return { success: true, skipped: true };
-    }
-
     const transporter = createTransporter();
     
+    // If no transporter, SMTP is not configured
+    if (!transporter) {
+      console.log('📧 Email NOT sent (SMTP not configured):', { to, subject });
+      console.log('   Configure SMTP in backend/.env to enable emails.');
+      return { success: false, skipped: true, reason: 'SMTP not configured' };
+    }
+
     const mailOptions = {
       from: ENV.SMTP_FROM || '"Talent IQ" <noreply@talentiq.com>',
       to,
@@ -48,20 +49,39 @@ export const sendEmail = async ({ to, subject, html, text }) => {
       text,
     };
 
+    console.log('📧 Sending email to:', to);
+    console.log('   Subject:', subject);
+    
     const info = await transporter.sendMail(mailOptions);
     
-    console.log("✅ Email sent:", info.messageId);
+    console.log('✅ Email sent successfully!');
+    console.log('   Message ID:', info.messageId);
+    console.log('   To:', to);
     
-    // In development, log the preview URL
+    // In development, log additional info
     if (ENV.NODE_ENV !== "production") {
-      console.log("Preview URL:", nodemailer.getTestMessageUrl(info));
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      if (previewUrl) {
+        console.log('   Preview URL:', previewUrl);
+      }
     }
     
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("❌ Error sending email:", error.message);
-    // Don't throw error - just log it and continue
-    return { success: false, error: error.message };
+    console.error('❌ Error sending email:', error.message);
+    console.error('   To:', to);
+    console.error('   Subject:', subject);
+    
+    // Log specific error types
+    if (error.code === 'EAUTH') {
+      console.error('   → Authentication failed. Check SMTP_USER and SMTP_PASS');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   → Connection failed. Check SMTP_HOST and SMTP_PORT');
+    } else if (error.code === 'ETIMEDOUT') {
+      console.error('   → Connection timeout. Check firewall/network settings');
+    }
+    
+    return { success: false, error: error.message, code: error.code };
   }
 };
 

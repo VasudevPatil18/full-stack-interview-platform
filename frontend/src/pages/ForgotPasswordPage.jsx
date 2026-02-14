@@ -8,7 +8,6 @@ function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [resetUrl, setResetUrl] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,12 +16,6 @@ function ForgotPasswordPage() {
     try {
       const response = await axios.post("/auth/forgot-password", { email });
       setIsSubmitted(true);
-      
-      // In development, show the reset URL
-      if (response.data.resetUrl) {
-        setResetUrl(response.data.resetUrl);
-      }
-      
       toast.success(response.data.message);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to send reset email");
@@ -47,22 +40,6 @@ function ForgotPasswordPage() {
             <p className="text-base-content/70 mb-6">
               We've sent a password reset link to <strong>{email}</strong>
             </p>
-
-            {resetUrl && (
-              <div className="alert alert-info mb-6">
-                <div className="flex flex-col items-start gap-2 w-full">
-                  <span className="font-semibold">Development Mode:</span>
-                  <a 
-                    href={resetUrl} 
-                    className="link link-primary text-sm break-all"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {resetUrl}
-                  </a>
-                </div>
-              </div>
-            )}
 
             <div className="space-y-3">
               <p className="text-sm text-base-content/60">

@@ -13,10 +13,13 @@ import {
   SendIcon,
   Loader2Icon,
   UsersIcon,
+  CodeIcon,
+  CopyIcon,
+  CheckIcon,
 } from 'lucide-react';
 import { useWebRTC } from '../hooks/useWebRTC';
 
-function WebRTCVideoCall({ session, user, isHost, isParticipant }) {
+function WebRTCVideoCall({ session, user, isHost, isParticipant, currentCode, currentLanguage }) {
   const navigate = useNavigate();
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -66,6 +69,66 @@ function WebRTCVideoCall({ session, user, isHost, isParticipant }) {
       sendMessage(messageInput);
       setMessageInput('');
     }
+  };
+
+  const handleShareCode = () => {
+    if (currentCode && currentCode.trim()) {
+      const codeMessage = `\`\`\`${currentLanguage}\n${currentCode}\n\`\`\``;
+      sendMessage(codeMessage);
+    }
+  };
+
+  const CodeBlock = ({ language, code }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div className="space-y-0 max-w-full">
+        <div className="flex items-center justify-between bg-base-300 px-3 py-1 rounded-t-lg">
+          <span className="text-xs font-mono text-base-content/70">{language}</span>
+          <button
+            onClick={handleCopy}
+            className="btn btn-ghost btn-xs gap-1"
+            title="Copy code"
+          >
+            {copied ? (
+              <>
+                <CheckIcon className="w-3 h-3" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <CopyIcon className="w-3 h-3" />
+                Copy
+              </>
+            )}
+          </button>
+        </div>
+        <pre className="bg-base-300 p-3 rounded-b-lg overflow-x-auto max-w-full">
+          <code className="text-xs font-mono whitespace-pre-wrap break-words">{code}</code>
+        </pre>
+      </div>
+    );
+  };
+
+  const renderMessage = (msg) => {
+    // Check if message contains code block
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/;
+    const match = codeBlockRegex.exec(msg.message);
+    
+    if (match) {
+      const language = match[1] || 'text';
+      const code = match[2];
+
+      return <CodeBlock language={language} code={code} />;
+    }
+
+    return <span className="whitespace-pre-wrap break-words">{msg.message}</span>;
   };
 
   const handleLeave = () => {
@@ -255,7 +318,7 @@ function WebRTCVideoCall({ session, user, isHost, isParticipant }) {
                         msg.userId === user._id ? 'chat-bubble-primary' : ''
                       }`}
                     >
-                      {msg.message}
+                      {renderMessage(msg)}
                     </div>
                   </div>
                 ))
@@ -263,7 +326,17 @@ function WebRTCVideoCall({ session, user, isHost, isParticipant }) {
               <div ref={chatEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-base-300">
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-base-300 space-y-2">
+              {currentCode && (
+                <button
+                  type="button"
+                  onClick={handleShareCode}
+                  className="btn btn-sm btn-outline btn-primary w-full gap-2"
+                >
+                  <CodeIcon className="w-4 h-4" />
+                  Share Current Code
+                </button>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"

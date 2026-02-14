@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { ENV } from "../lib/env.js";
 import { sendEmail, emailTemplates } from "../lib/email.js";
 
@@ -12,24 +13,34 @@ export async function signup(req, res) {
   try {
     const { name, email, password } = req.body;
 
-    console.log("Signup attempt:", { name, email, passwordLength: password?.length });
+    console.log("=== SIGNUP ATTEMPT ===");
+    console.log("Request body:", { name, email, passwordLength: password?.length });
+    console.log("Database connected:", mongoose.connection.readyState === 1);
 
     if (!name || !email || !password) {
+      console.log("❌ Missing required fields");
       return res.status(400).json({ message: "All fields are required" });
     }
 
     if (password.length < 6) {
+      console.log("❌ Password too short");
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
+    console.log("Checking for existing user...");
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
+      console.log("❌ Email already exists:", email);
       return res.status(400).json({ message: "Email already exists" });
     }
 
+    console.log("Creating new user...");
     const user = await User.create({ name, email, password });
-    console.log("User created successfully:", user._id);
+    console.log("✅ User created successfully!");
+    console.log("   ID:", user._id);
+    console.log("   Name:", user.name);
+    console.log("   Email:", user.email);
 
     const token = generateToken(user._id);
 
@@ -40,6 +51,7 @@ export async function signup(req, res) {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    console.log("✅ Signup successful, sending response");
     res.status(201).json({
       user: {
         _id: user._id,
@@ -51,10 +63,26 @@ export async function signup(req, res) {
       token,
     });
   } catch (error) {
-    console.error("Error in signup controller:", error);
-    console.error("Error details:", error.message);
-    console.error("Error stack:", error.stack);
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
+    console.error("=== SIGNUP ERROR ===");
+    console.error("Error name:", error.name);
+    console.error("Error message:", error.message);
+    console.error("Error code:", error.code);
+    
+    if (error.code === 11000) {
+      console.error("❌ Duplicate key error - email already exists");
+      return res.status(400).json({ message: "Email already exists" });
+    }
+    
+    if (error.name === 'ValidationError') {
+      console.error("❌ Validation error:", error.message);
+      return res.status(400).json({ message: error.message });
+    }
+    
+    console.error("Full error:", error);
+    res.status(500).json({ 
+      message: "Internal Server Error", 
+      error: ENV.NODE_ENV === "development" ? error.message : "Registration failed"
+    });
   }
 }
 
@@ -175,8 +203,17 @@ export async function forgotPassword(req, res) {
 
       // Log for development
       if (ENV.NODE_ENV === "development") {
-        console.log("Password reset URL:", resetUrl);
-        console.log("Email sent:", emailResult.success);
+        console.log("\n" + "=".repeat(60));
+        console.log("📧 PASSWORD RESET EMAIL");
+        console.log("=".repeat(60));
+        console.log("To:", user.email);
+        console.log("Email sent:", emailResult.success ? "✅ Yes" : "❌ No");
+        if (!emailResult.success && emailResult.skipped) {
+          console.log("⚠️  SMTP not configured - email skipped");
+        }
+        console.log("\n🔗 Reset URL (valid for 1 hour):");
+        console.log(resetUrl);
+        console.log("=".repeat(60) + "\n");
       }
     } catch (emailError) {
       // Log email error but don't expose it to user for security
@@ -184,7 +221,11 @@ export async function forgotPassword(req, res) {
       
       // In development, still log the reset URL so it can be used
       if (ENV.NODE_ENV === "development") {
-        console.log("Password reset URL (email failed):", resetUrl);
+        console.log("\n" + "=".repeat(60));
+        console.log("⚠️  EMAIL FAILED - But here's the reset URL:");
+        console.log("=".repeat(60));
+        console.log(resetUrl);
+        console.log("=".repeat(60) + "\n");
       }
     }
 

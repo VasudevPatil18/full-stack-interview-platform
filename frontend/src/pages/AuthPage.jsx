@@ -10,11 +10,14 @@ import {
   SparklesIcon, 
   UserIcon, 
   VideoIcon,
-  ZapIcon
+  ZapIcon,
+  EyeIcon,
+  EyeOffIcon
 } from "lucide-react";
 
 function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -186,16 +189,30 @@ function AuthPage() {
                     </Link>
                   )}
                 </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  minLength={6}
-                  className="input input-bordered w-full focus:input-primary text-sm md:text-base"
-                  placeholder="••••••••"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    minLength={6}
+                    className="input input-bordered w-full focus:input-primary text-sm md:text-base pr-12"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/60 hover:text-base-content transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOffIcon className="size-5" />
+                    ) : (
+                      <EyeIcon className="size-5" />
+                    )}
+                  </button>
+                </div>
                 {!isLogin && (
                   <label className="label">
                     <span className="label-text-alt text-base-content/60 text-xs">
